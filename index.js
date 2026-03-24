@@ -2,6 +2,7 @@ const {
   Client,
   GatewayIntentBits,
   EmbedBuilder,
+  MessageFlags,
   REST,
   Routes
 } = require("discord.js");
@@ -226,7 +227,7 @@ class GuildMusicSession {
     connection.subscribe(this.player);
 
     try {
-      await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
+      await entersState(connection, VoiceConnectionStatus.Ready, 10_000);
     } catch {
       connection.destroy();
       throw new Error("I could not join that voice channel.");
@@ -478,7 +479,7 @@ client.on("interactionCreate", async interaction => {
   if (!interaction.guild) {
     return interaction.reply({
       content: "This bot only works inside servers.",
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   }
 
@@ -486,11 +487,12 @@ client.on("interactionCreate", async interaction => {
     const { commandName } = interaction;
 
     if (commandName === "join") {
+      await interaction.deferReply();
       const voiceChannel = getMemberVoiceChannel(interaction);
       const session = getSession(interaction.guild.id);
       session.setTextChannel(interaction.channel);
       await session.connect(voiceChannel);
-      return interaction.reply(`Joined **${voiceChannel.name}**.`);
+      return interaction.editReply(`Joined **${voiceChannel.name}**.`);
     }
 
     if (commandName === "play") {
@@ -617,13 +619,14 @@ client.on("interactionCreate", async interaction => {
   } catch (error) {
     console.error("Command error:", error);
     const payload = {
-      content: error.message || "Unexpected error while executing command.",
-      ephemeral: true
+      content: error.message || "Unexpected error while executing command."
     };
     if (interaction.deferred || interaction.replied) {
       return interaction.editReply(payload).catch(() => {});
     }
-    return interaction.reply(payload).catch(() => {});
+    return interaction
+      .reply({ ...payload, flags: MessageFlags.Ephemeral })
+      .catch(() => {});
   }
 });
 
