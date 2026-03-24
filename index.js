@@ -47,7 +47,7 @@ const CLIENT_ID = requireEnv("CLIENT_ID");
 const GUILD_ID = process.env.GUILD_ID || "";
 const AUTO_REGISTER_COMMANDS = parseBool(process.env.AUTO_REGISTER_COMMANDS, true);
 
-const IDLE_DISCONNECT_MS = 3 * 60 * 1000;
+const IDLE_DISCONNECT_MS = Number(process.env.IDLE_DISCONNECT_MS || 15 * 60 * 1000);
 const MAX_PLAYLIST_QUEUE = 50;
 
 const client = new Client({
@@ -61,6 +61,10 @@ function parseDurationRaw(raw) {
   const parts = raw.split(":").map(part => Number(part));
   if (parts.some(part => Number.isNaN(part))) return 0;
   return parts.reduce((total, part) => total * 60 + part, 0);
+}
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function formatDuration(seconds) {
@@ -236,10 +240,17 @@ class GuildMusicSession {
     connection.on(VoiceConnectionStatus.Disconnected, async () => {
       try {
         await Promise.race([
+          entersState(connection, VoiceConnectionStatus.Ready, 5_000),
           entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
           entersState(connection, VoiceConnectionStatus.Connecting, 5_000)
         ]);
       } catch {
+        if (connection.rejoinAttempts < 5) {
+          await wait((connection.rejoinAttempts + 1) * 2_000);
+          connection.rejoin();
+          return;
+        }
+        await this.sendMessage("Voice connection was lost. Leaving channel.");
         this.leave();
       }
     });
